@@ -1,6 +1,7 @@
 import fitz  # PyMuPDF
 from docx import Document
 import nltk
+from nltk.tokenize import sent_tokenize
 
 def extract_pdf_metadata(pdf_path: str) -> dict:
     doc = fitz.open(pdf_path)
@@ -48,7 +49,7 @@ def extract_title(text: str, metadata_title: str | None) -> str:
 
 
 nltk.download("punkt")
-from nltk.tokenize import sent_tokenize
+
 
 def rule_based_summary(text: str, max_sentences=3) -> str:
     sentences = sent_tokenize(text)
