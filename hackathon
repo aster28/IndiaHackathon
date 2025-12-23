@@ -3,8 +3,6 @@ from docx import Document
 import nltk
 from nltk.tokenize import sent_tokenize
 
-import fitz  # PyMuPDF
-
 def extract_pdf_metadata(pdf_path: str) -> dict:
     with fitz.open(pdf_path) as doc:
         meta = doc.metadata
