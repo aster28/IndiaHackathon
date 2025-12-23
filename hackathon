@@ -1,0 +1,76 @@
+import fitz  # PyMuPDF
+from docx import Document
+import nltk
+
+def extract_pdf_metadata(pdf_path: str) -> dict:
+    doc = fitz.open(pdf_path)
+    meta = doc.metadata
+    return {
+        "title": meta.get("title"),
+        "author_name": meta.get("author_name"),
+        "date": meta.get("date"),
+        "updated_date": meta.get("updated"),
+        "tables": doc.tables_count,
+        "pages" : doc.pages_count
+    }
+
+
+def extract_docx_metadata(docx_path: str) -> dict:
+    doc = Document(docx_path)
+    props = doc.core_properties
+    return {
+        "title": props.title,
+        "author_name": props.author_name,
+        "date": props.date,
+        "updated_date": props.updated,
+        "tables": props.tables_count,
+        "pages": props.pages_count
+    }
+def extract_pdf_text(pdf_path: str) -> str:
+    doc = fitz.open(pdf_path)
+    text = ""
+    for page in doc:
+        text += page.get_text()
+    return text.strip()
+def extract_docx_text(docx_path: str) -> str:
+    doc = Document(docx_path)
+    return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+def extract_title(text: str, metadata_title: str | None) -> str:
+    if metadata_title and len(metadata_title.strip()) > 5:
+        return metadata_title.strip()
+
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    for line in lines[:10]:
+        if len(line) < 120:  # Likely heading
+            return line
+
+    return "Untitled Document"
+
+
+nltk.download("punkt")
+from nltk.tokenize import sent_tokenize
+
+def rule_based_summary(text: str, max_sentences=3) -> str:
+    sentences = sent_tokenize(text)
+    return " ".join(sentences[:max_sentences])
+def extract_doc_info(file_path: str, file_type: str) -> dict:
+    if file_type == "pdf":
+        metadata = extract_pdf_metadata(file_path)
+        text = extract_pdf_text(file_path)
+    elif file_type == "docx":
+        metadata = extract_docx_metadata(file_path)
+        text = extract_docx_text(file_path)
+    else:
+        raise ValueError("Unsupported file type")
+
+    title = extract_title(text, metadata.get("title"))
+    summary = ai_summary(text) if len(text) > 500 else rule_based_summary(text)
+
+    return {
+        "metadata": metadata,
+        "title": title,
+        "summary": summary
+    }
+
+  
+    
