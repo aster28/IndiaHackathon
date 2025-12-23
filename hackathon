@@ -3,17 +3,29 @@ from docx import Document
 import nltk
 from nltk.tokenize import sent_tokenize
 
+import fitz  # PyMuPDF
+
 def extract_pdf_metadata(pdf_path: str) -> dict:
-    doc = fitz.open(pdf_path)
-    meta = doc.metadata
-    return {
-        "title": meta.get("title"),
-        "author_name": meta.get("author_name"),
-        "date": meta.get("date"),
-        "updated_date": meta.get("updated"),
-        "tables": doc.tables_count,
-        "pages" : doc.pages_count
-    }
+    with fitz.open(pdf_path) as doc:
+        meta = doc.metadata
+
+        # Count tables manually (PyMuPDF 1.21+)
+        table_count = 0
+        for page in doc:
+            try:
+                tables = page.find_tables()
+                table_count += len(tables.tables)
+            except Exception:
+                pass  # page has no tables or method unsupported
+
+        return {
+            "title": meta.get("title"),
+            "author": meta.get("author"),
+            "created_date": meta.get("creationDate"),
+            "modified_date": meta.get("modDate"),
+            "tables": table_count,
+            "pages": doc.page_count,
+        }
 
 
 def extract_docx_metadata(docx_path: str) -> dict:
