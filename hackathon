@@ -35,12 +35,37 @@ def extract_docx_metadata(docx_path: str) -> dict:
         "pages": props.pages_count
     }
 
-def extract_pdf_text(pdf_path: str) -> str:
-    doc = fitz.open(pdf_path)
-    text = ""
-    for page in doc:
-        text += page.get_text()
-    return text.strip()
+
+def clean_table(table_data):
+    """
+    Cleans table data by removing empty rows/columns and stripping whitespace.
+    """
+    cleaned = []
+    for row in table_data:
+        # Remove empty rows
+        if any(cell.strip() for cell in row):
+            cleaned.append([cell.strip() for cell in row])
+    # Optional: remove empty columns if needed
+    if cleaned:
+        # Transpose, remove empty columns, then transpose back
+        transposed = list(zip(*cleaned))
+        transposed = [col for col in transposed if any(cell for cell in col)]
+        cleaned = list(map(list, zip(*transposed)))
+    return cleaned
+
+def export_tables(tables, output_dir="tables_output"):
+    """
+    Exports tables to CSV files, one file per table
+    """
+    os.makedirs(output_dir, exist_ok=True)
+
+    for idx, table_info in enumerate(tables, start=1):
+        page = table_info["page"]
+        table = table_info["table"]
+        df = pd.DataFrame(table)
+        filename = f"table_page{page}_{idx}.csv"
+        df.to_csv(os.path.join(output_dir, filename), index=False)
+        print(f"Exported: {filename}")
 
 def extract_docx_text(docx_path: str) -> str:
     doc = Document(docx_path)
