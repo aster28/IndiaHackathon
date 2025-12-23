@@ -1,6 +1,6 @@
-import fitz  # PyMuPDF
-from docx import Document
-import nltk
+import fitz  # To detect table, table format
+from docx import Document #To read docx files
+import nltk # Tokenization
 from nltk.tokenize import sent_tokenize
 
 def extract_pdf_metadata(pdf_path: str) -> dict:
@@ -23,8 +23,7 @@ def extract_pdf_metadata(pdf_path: str) -> dict:
             "modified_date": meta.get("modDate"),
             "tables": table_count,
             "pages": doc.page_count,
-        }
-
+}
 
 def extract_docx_metadata(docx_path: str) -> dict:
     doc = Document(docx_path)
@@ -37,15 +36,18 @@ def extract_docx_metadata(docx_path: str) -> dict:
         "tables": props.tables_count,
         "pages": props.pages_count
     }
+
 def extract_pdf_text(pdf_path: str) -> str:
     doc = fitz.open(pdf_path)
     text = ""
     for page in doc:
         text += page.get_text()
     return text.strip()
+
 def extract_docx_text(docx_path: str) -> str:
     doc = Document(docx_path)
     return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+
 def extract_title(text: str, metadata_title: str | None) -> str:
     if metadata_title and len(metadata_title.strip()) > 5:
         return metadata_title.strip()
