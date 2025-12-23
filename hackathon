@@ -2,6 +2,9 @@ import fitz  # To detect table, table format
 from docx import Document #To read docx files
 import nltk # Tokenization
 from nltk.tokenize import sent_tokenize
+import json #To save as json object
+nltk.download("punkt")
+
 
 def extract_pdf_metadata(pdf_path: str) -> dict:
     with fitz.open(pdf_path) as doc:
@@ -23,16 +26,19 @@ def extract_pdf_metadata(pdf_path: str) -> dict:
             "pages": doc.page_count,
 }
 
+
+
 def extract_docx_metadata(docx_path: str) -> dict:
     doc = Document(docx_path)
     props = doc.core_properties
+
     return {
         "title": props.title,
-        "author_name": props.author_name,
-        "date": props.date,
-        "updated_date": props.updated,
-        "tables": props.tables_count,
-        "pages": props.pages_count
+        "author": props.author,
+        "created_date": props.created,
+        "modified_date": props.modified,
+        "tables": len(doc.tables),
+        "pages": None  # DOCX does NOT reliably store page count
     }
 
 
@@ -82,10 +88,6 @@ def extract_title(text: str, metadata_title: str | None) -> str:
 
     return "Untitled Document"
 
-
-nltk.download("punkt")
-
-
 def rule_based_summary(text: str, max_sentences=3) -> str:
     sentences = sent_tokenize(text)
     return " ".join(sentences[:max_sentences])
@@ -108,5 +110,11 @@ def extract_doc_info(file_path: str, file_type: str) -> dict:
         "summary": summary
     }
 
+
+
+data = extract_doc_info("sample.pdf", "pdf")
+
+with open("output.json", "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2, default=str)
   
     
