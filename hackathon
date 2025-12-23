@@ -1,120 +1,65 @@
-import fitz  # To detect table, table format
-from docx import Document #To read docx files
-import nltk # Tokenization
-from nltk.tokenize import sent_tokenize
-import json #To save as json object
-nltk.download("punkt")
+import os
+import pypandoc
+from bs4 import BeautifulSoup
+import nltk
+from sklearn.feature_extraction.text import TfidfVectorizer
+import numpy as np
 
+nltk.download('punkt')
 
-def extract_pdf_metadata(pdf_path: str) -> dict:
-    with fitz.open(pdf_path) as doc:
-        meta = doc.metadata
-        table_count = 0
-        for page in doc:
-            try:
-                tables = page.find_tables()
-                table_count += len(tables.tables)
-            except Exception:
-                pass  # page has no tables or method unsupported
+# --- Settings ---
+INPUT_FOLDER = "documents"
+SUMMARY_RATIO = 0.3  # top 30% sentences for summary
 
-        return {
-            "title": meta.get("title"),
-            "author": meta.get("author"),
-            "created_date": meta.get("creationDate"),
-            "modified_date": meta.get("modDate"),
-            "tables": table_count,
-            "pages": doc.page_count,
-}
-
-
-
-def extract_docx_metadata(docx_path: str) -> dict:
-    doc = Document(docx_path)
-    props = doc.core_properties
-
-    return {
-        "title": props.title,
-        "author": props.author,
-        "created_date": props.created,
-        "modified_date": props.modified,
-        "tables": len(doc.tables),
-        "pages": None  # DOCX does NOT reliably store page count
-    }
-
-
-def clean_table(table_data):
-    """
-    Cleans table data by removing empty rows/columns and stripping whitespace.
-    """
-    cleaned = []
-    for row in table_data:
-        # Remove empty rows
-        if any(cell.strip() for cell in row):
-            cleaned.append([cell.strip() for cell in row])
-    # Optional: remove empty columns if needed
-    if cleaned:
-        # Transpose, remove empty columns, then transpose back
-        transposed = list(zip(*cleaned))
-        transposed = [col for col in transposed if any(cell for cell in col)]
-        cleaned = list(map(list, zip(*transposed)))
-    return cleaned
-
-def export_tables(tables, output_dir="tables_output"):
-    """
-    Exports tables to CSV files, one file per table
-    """
-    os.makedirs(output_dir, exist_ok=True)
-
-    for idx, table_info in enumerate(tables, start=1):
-        page = table_info["page"]
-        table = table_info["table"]
-        df = pd.DataFrame(table)
-        filename = f"table_page{page}_{idx}.csv"
-        df.to_csv(os.path.join(output_dir, filename), index=False)
-        print(f"Exported: {filename}")
-
-def extract_docx_text(docx_path: str) -> str:
-    doc = Document(docx_path)
-    return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
-
-def extract_title(text: str, metadata_title: str | None) -> str:
-    if metadata_title and len(metadata_title.strip()) > 5:
-        return metadata_title.strip()
-
-    lines = [l.strip() for l in text.split("\n") if l.strip()]
-    for line in lines[:10]:
-        if len(line) < 120:  # Likely heading
-            return line
-
-    return "Untitled Document"
-
-def rule_based_summary(text: str, max_sentences=3) -> str:
-    sentences = sent_tokenize(text)
-    return " ".join(sentences[:max_sentences])
-def extract_doc_info(file_path: str, file_type: str) -> dict:
-    if file_type == "pdf":
-        metadata = extract_pdf_metadata(file_path)
-        text = extract_pdf_text(file_path)
-    elif file_type == "docx":
-        metadata = extract_docx_metadata(file_path)
-        text = extract_docx_text(file_path)
-    else:
-        raise ValueError("Unsupported file type")
-
-    title = extract_title(text, metadata.get("title"))
-    summary = ai_summary(text) if len(text) > 500 else rule_based_summary(text)
-
-    return {
-        "metadata": metadata,
-        "title": title,
-        "summary": summary
-    }
-
-
-
-data = extract_doc_info("sample.pdf", "pdf")
-
-with open("output.json", "w", encoding="utf-8") as f:
-    json.dump(data, f, indent=2, default=str)
-  
+# --- Function to extract text from DOCX ---
+def extract_docx_text(docx_path):
+    html = pypandoc.convert_file(docx_path, 'html')
+    soup = BeautifulSoup(html, 'html.parser')
     
+    # Paragraphs
+    paragraphs = soup.find_all('p')
+    para_text = [p.get_text().strip() for p in paragraphs if p.get_text().strip()]
+    
+    # Tables
+    tables = soup.find_all('table')
+    table_rows = []
+    for table in tables:
+        for tr in table.find_all('tr'):
+            cells = [td.get_text().strip() for td in tr.find_all(['td','th']) if td.get_text().strip()]
+            if cells:
+                row_text = ' | '.join(cells)
+                table_rows.append(row_text)
+    
+    full_text = '\n'.join(para_text + table_rows)
+    return full_text
+
+# --- Function to summarize text ---
+def summarize_text(text, ratio=SUMMARY_RATIO):
+    sentences = nltk.sent_tokenize(text)
+    if not sentences:
+        return ""
+    
+    vectorizer = TfidfVectorizer(stop_words='english')
+    X = vectorizer.fit_transform(sentences)
+    scores = X.sum(axis=1).A1
+    
+    top_n = max(1, int(len(sentences) * ratio))
+    top_indices = np.argsort(scores)[-top_n:]
+    top_indices.sort()
+    
+    summary = ' '.join([sentences[i] for i in top_indices])
+    return summary
+
+# --- Get first DOCX in folder ---
+docx_files = [f for f in os.listdir(INPUT_FOLDER) if f.lower().endswith('.docx')]
+if not docx_files:
+    raise FileNotFoundError("No DOCX files found in the folder.")
+
+first_docx_path = os.path.join(INPUT_FOLDER, docx_files[0])
+
+# --- Extract text and summarize ---
+text = extract_docx_text(first_docx_path)
+summary = summarize_text(text)
+
+print(f"Summary of '{docx_files[0]}':\n")
+print(summary)
